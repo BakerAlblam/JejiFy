@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import {
   aspectRatioOptions,
+  creditFee,
   defaultValues,
   transformationTypes,
 } from '@/constants';
@@ -26,8 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useState } from 'react';
-import { AspectRatioKey } from '@/lib/utils';
+import { useState, useTransition } from 'react';
+import { AspectRatioKey, debounce, deepMergeObjects } from '@/lib/utils';
+import { updateCredits } from '@/lib/actions/user.actions';
 
 export const formSchema = z.object({
   title: z.string(),
@@ -46,6 +48,7 @@ const TransformationForm = ({
   config = null,
 }: TransformationFormProps) => {
   const [Image, setImage] = useState(data);
+  const [isPending, startTransition] = useTransition();
   const [newTransformation, setNewTransformation] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTransforming, setIsTransforming] = useState(false);
@@ -68,24 +71,54 @@ const TransformationForm = ({
 
   // 2. Define a submit handler.
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // Do something with the form values.
-    // ✅ This will be type-safe and validated.
     console.log(values);
   }
 
   const onSelectFieldHandler = (
     value: string,
     onChangeField: (value: string) => void
-  ) => {};
+  ) => {
+    const imageSize = aspectRatioOptions[value as AspectRatioKey];
+    setImage((prevState: any) => ({
+      ...prevState,
+      aspectRatio: imageSize.aspectRatio,
+      width: imageSize.width,
+      height: imageSize.height,
+    }));
+
+    setNewTransformation(transformationType.config as any);
+
+    return onChangeField(value);
+  };
 
   const onInputChangeHandler = (
     fieldName: string,
     value: string,
     type: string,
     onChangeField: (value: string) => void
-  ) => {};
+  ) => {
+    debounce(() => {
+      setNewTransformation((prevState: any) => ({
+        ...prevState,
+        [type]: {
+          ...prevState?.[type],
+          [fieldName === 'prompt' ? 'prompt' : 'to']: value,
+        },
+      }));
+      return onChangeField(value);
+    }, 1000);
+  };
 
-  const onTransformHandler = () => {};
+  const onTransformHandler = async () => {
+    setIsTransforming(true);
+    setTransformationConfig(
+      deepMergeObjects(newTransformation, transformationConfig)
+    );
+    setNewTransformation(null);
+    startTransition(async () => {
+      //await updateCredits(userId, creditFee);
+    });
+  };
 
   return (
     <Form {...form}>
